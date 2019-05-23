@@ -1,0 +1,86 @@
+---
+title: "Segmentation"
+author: "Pik Shan Yiu"
+date: "1/27/2019"
+output: html_document
+---
+
+
+```{r}
+library(reshape2)
+library(dplyr)
+library(psych)
+library(validate)
+library(ggplot2)
+library(ggcorrplot)
+library(pcaPP)
+library(ggbiplot)
+library(caret)
+```
+
+
+#1. Importing Data
+```{r}
+raw <- read.csv("Chargers.csv")
+raw <- raw[, 3:26]
+str(raw)
+head(raw)
+```
+
+#2. Validate data
+```{r}
+describe(raw)
+colSums(is.na(raw)) #Checking NAs
+table(unlist(raw) %in% 1:5) #Simple Test 
+```
+
+#Correlation Matrix
+```{r}
+cormat <- round(cor(raw), 2)
+ggcorrplot(cormat, hc.order = TRUE, type = "lower", outline.color = "white")
+```
+
+
+
+
+```{r}
+#PCA
+pr_out <-prcomp(raw, center = TRUE, scale = TRUE)
+summary(pr_out)
+pr_var <-  pr_out$sdev ^ 2
+pve <- pr_var / sum(pr_var)
+plot(pve, xlab = "Principal Component", ylab = "Proportion of Variance Explained", ylim = c(0,1), type = 'b')
+plot(cumsum(pve), xlab = "Principal Component", ylab = "Cumulative Proportion of Variance Explained", ylim =c(0,1), type = 'b')
+
+```
+
+```{r}
+#Interpreting Results
+rot_loading <- varimax(pr_out$rotation[, 1:5])
+rot_loading
+```
+
+```{r}
+# Factor Score
+factor_score <- (pr_out$x[, 1:5])
+colnames(factor_score) <- paste("DV (Factor)",1:ncol(factor_score),sep=" ")
+head(factor_score)
+dim(factor_score)
+```
+
+```{r}
+# Segmentation on Factor Score
+km <- kmeans(factor_score, centers = 5, nstart = 20)
+raw$cluster <- km$cluster
+
+profile_column <- 2:83
+ProjectData_profile <- raw[, profile_column]
+population_average <- matrix(apply(ProjectData_profile[, 1:81], 2, mean), ncol=1)
+colnames(population_average) <- "Population"
+
+Cluster_Profile_mean <- ProjectData_profile %>% group_by(cluster) %>% summarise_all(funs(mean)) %>% t()
+colnames(Cluster_Profile_mean) <- paste("Seg.", 1:5, sep="")
+Cluster_Profile_mean <- Cluster_Profile_mean[-1, ]
+cluster.profile <- cbind(population_average,Cluster_Profile_mean)
+# Can pick important variables to visualize 
+```
